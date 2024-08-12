@@ -12,5 +12,5 @@ How to engage:
 There are three main files:
 1. Data sourced from: https://isps.yale.edu/research/data/d062
 2. The primary Rmd file: Scheve_Stasavage_2010_replication.Rmd
-3. A short analysis: Scheve_Stasavage_2010_anlysis.pdf
+3. A short analysis: Scheve_Stasavage_2010_analysis.pdf
 
