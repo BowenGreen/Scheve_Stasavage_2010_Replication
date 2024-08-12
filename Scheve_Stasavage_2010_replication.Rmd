@@ -1,0 +1,526 @@
+```{r}
+rm(list=ls())
+library(rio)
+library(mice)
+library(jtools)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(estimatr)
+library(car)
+library(plm)
+library(foreign)
+library(nnet)
+library(lmtest)
+library(rms)
+library(AER)
+library(stringr)
+library(fixest)
+```
+
+```{r}
+gs <- import("progressTax.dta", convert.factors=F)
+
+panel.gs <- pdata.frame(gs, c("ccode", "year"))
+panel.gs$Year <- as.numeric(as.character(panel.gs$year))
+```
+
+#1.A 
+```{R}
+model1A <- plm(topratep ~ wwihighmobaft, data = panel.gs, index = c('ccode', 'Year'),
+               model = "pooling")
+summary(model1A)
+```
+
+#1.B 
+
+```{r}
+model1B <- plm(topratep ~ wwihighmobaft + factor(Year) + factor(ccode), 
+               data = panel.gs, 
+               subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930, 
+               model = "within",
+               index = c('ccode', 'Year'))
+
+coeftest(model1B)
+```
+
+#1.C 
+
+```{R}
+model1C <- feols(topratep ~ wwihighmobaft + as.factor(Year) + factor(ccode), data = panel.gs, subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930)
+coeftest(model1C)
+```
+
+#1.D 
+
+```{r}
+model1D <- plm(topratep ~ wwihighmobaft, data = panel.gs, index = c('ccode', 'Year'), model = "between")
+coeftest(model1D)
+```
+
+#1.E 
+
+```{r}
+model1E <- plm(topratep ~ wwihighmobaft + Year + as.factor(ccode),
+                 data = panel.gs,
+                 subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+                 model = "within",
+               index = c('ccode', 'Year'))
+
+vcov_cluster1E <- vcovBK(model1E, cluster = "group", cluster.by = "group")
+coeftest(model1E, vcov. = vcov_cluster1E)
+```
+
+#1.F 
+
+```{r}
+model1F <- plm(topratep ~ wwihighmobaft + Year + as.factor(ccode),
+              data = panel.gs,
+              subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+              model = "pooling",
+              index = c('ccode', 'Year'))
+
+vcov_nw1F <- vcovNW(model1F, type = "sss", maxlag = 1)
+coeftest(model1F, vcov. = vcov_nw1F)
+```
+
+#1.G 
+
+```{R}
+results1 <- data.frame(Model = c("Pooled Regression (A)", "Between Estimator (D)", "Fixed Effects - Dummy (B)",
+                               "Fixed Effects - Transformation (C)", "Clustered SE (E)",
+                               "Newey-West SE (F)"),
+                     wwihighmobaft = c(43.6953, 19.3900 ,  31.06824 , 31.06824 , 32.81122, 32.81122),
+                     wwihighmobaftSE = c(1.5537, 9.0378, 2.49477,  2.49477, 4.29498, 4.46127))
+print(results1)
+```
+
+```{r}
+library(gridExtra)
+table_grob1 <- tableGrob(results1)
+
+ggsave("table.png", plot = table_grob1, width = 20, height = 6, dpi = 300)
+```
+
+#1.H
+
+```{R}
+model1H <- feols(topratep ~ wwihighmobaft + Year + factor(ccode), data = panel.gs, subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930)
+residuals1H <- resid(model1H)
+aux_model1H <- lm(residuals1H[-1] ~ residuals1H[-length(residuals1H)])
+bg_test1H <- bgtest(aux_model1H, order = 1)  
+print(bg_test1H)
+```
+
+```{r}
+autocorr_coef <- coef(aux_model1H)["residuals1H[-length(residuals1H)]"]
+print(autocorr_coef)
+```
+
+#Specification 2
+#2.A
+```{R}
+model2A <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + year,
+model = "pooling",
+data = panel.gs)
+summary(model2A)
+```
+
+#2.B
+
+```{r}
+model2B <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + Year,
+                data = panel.gs,
+                subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+                index = c('ccode', 'Year'), 
+                model = "within")
+
+coeftest(model2B)
+```
+
+#2.C
+
+```{r}
+model2C <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + Year + as.factor(ccode),
+                     data = panel.gs,
+                     subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+                     index = c('ccode', 'Year'), 
+                     model = "within")
+
+vcov_cluster2C <- vcovHC(model2C, method = "arellano", type = "HC0", cluster = "group")
+
+coeftest(model2C, vcov. = vcov_cluster2C)
+```
+
+#2.D. 
+
+```{r}
+model2D<- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + Year,
+              data = panel.gs,
+              subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+              index = c('ccode', 'Year'), 
+              model = "within")
+
+vcov_nw2D <- vcovNW(model2D, type = "HC3", maxlag = 1)
+coeftest(model2D, vcov. = vcov_nw2D)
+```
+
+#2.E
+
+```{R}
+results2 <- data.frame(Model = c("Pooled Regression (A)", "Fixed Effects (B)",
+                               "Fixed Effects CSE (C)", "Newey-West SE (D)"),
+                     wwihighmobaft = c(37.5134, 36.3778, 36.3778 , 36.3778),
+                     wwihighmobaftSE = c(1.7635,2.4186, 6.2225, 4.1150),
+                     gdppcp = c(0.8625, -10.3171,-10.3171,-10.3171),
+                     gdppcpSE= c(0.1716, 1.8696,3.4602,2.427),
+                     leftseatshp= c(0.4586, -0.1229,-0.1229,-0.1229),
+                     leftseatshpSE= c(0.0410, 0.1041,0.1002, 0.0994),
+                     munsuff = c(9.9144,7.8563, 7.8563, 7.8563),
+                     munsuffSE= c(1.5309,2.5693,2.6561, 2.3556))
+                      
+print(results2)
+```
+
+```{r}
+library(gridExtra)
+table_grob <- tableGrob(results2)
+
+ggsave("table.png", plot = table_grob, width = 20, height = 6, dpi = 300)
+```
+
+#2.F
+
+```{R}
+model2F <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + Year + as.factor(ccode),
+               data = panel.gs,
+               subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+               index = c('ccode', 'Year'), 
+               model = "within")
+country_effects2F <- fixef(model2F)
+print(country_effects2F)
+```
+
+#Table 1, Column 5
+#5.A 
+
+```{R}
+model5A <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff+factor(year),
+           model = "pooling", data = panel.gs)
+summary(model5A)
+```
+
+#5.B 
+
+```{r}
+model5B <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + as.factor(year3) + as.factor(ccode),
+                data = panel.gs,
+                subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+                index = c('ccode', 'year3'), 
+                model = "within")
+
+coeftest(model5B)
+```
+
+#5.C 
+
+```{r}
+model5C <- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + as.factor(year3) + as.factor(ccode),
+                     data = panel.gs,
+                     subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+                     model = "within")
+
+vcov_cluster5C <- vcovHC(model5C, method = "arellano", type = "HC0", cluster = "group")
+coeftest(model5C, vcov. = vcov_cluster5C)
+```
+
+#5.D 
+
+```{r}
+model5D<- plm(topratep ~ wwihighmobaft + gdppcp + leftseatshp + munsuff + as.factor(year3) + as.factor(ccode),
+              data = panel.gs,
+              subset = panel.gs$Year >= 1900 & panel.gs$Year <= 1930,
+              model = "pooling")
+
+vcov_nw5D <- vcovNW(model5D, type = "sss", maxlag = 1)
+coeftest(model5D, vcov. = vcov_nw5D)
+```
+```{r}
+residuals5D <- residuals(model5D)
+plot(residuals5D, las = 3)
+```
+
+#5.E
+
+```{R}
+results5E <- data.frame(Model = c("Pooled Regression (A)", "Fixed Effects (B)",
+                               "Fixed Effects CSE (C)", "Newey-West SE (D)"),
+                     wwihighmobaft = c(37.513427, 34.00582, 34.00582 ,  34.00582),
+                     wwihighmobaftSE = c(1.763540,2.53859, 3.97712, 3.40816),
+                     
+                     gdppcp = c(0.862580, -5.94296,-5.94296,-5.94296),
+                     gdppcpSE= c(0.171572, 2.09343,1.84659,2.41751),
+                     
+                     leftseatshp= c(0.458644, -0.08693,-0.08693,-0.08693),
+                     leftseatshpSE= c(0.040964, 0.10276,0.14736 , 0.11735),
+                     
+                     munsuff = c(9.914397,6.99781, 6.99781, 6.99781),
+                     munsuffSE= c(1.530881,2.56806,3.11942, 2.51436))
+                      
+print(results5E)
+```
+```{r}
+table_grob5E <- tableGrob(results5E)
+ggsave("table1.png", plot = table_grob5E, width = 20, height = 6, dpi = 300)
+```
+
+#number of 0 values in this subset
+
+```{r}
+subset_data <- panel.gs[panel.gs$Year >= 1900 & panel.gs$Year <= 1930, c("Year", "topratep")]
+num_zeros <- sum(subset_data$topratep == 0)
+cat("Number of 0 values in topratep:", num_zeros)
+```
+
+```{r}
+rm(list=ls())
+library(rio)
+library(mice)
+library(jtools)
+library(tidyverse)
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(estimatr)
+library(car)
+library(Formula)
+library(plm)
+library(foreign)
+library(nnet)
+library(lmtest)
+library(rms)
+library(AER)
+library(stringr)
+```
+
+```{r}
+gs <- import("progressTax.dta", convert.factors=F)
+
+panel.gs <- pdata.frame(gs, c("ccode", "year"))
+
+panel.gs$Year <- as.numeric(as.character(panel.gs$year))
+```
+
+#Table 3, Column 1
+#1.A
+
+```{R}
+temp1A <- panel.gs[!is.na(panel.gs$topratep) & !is.na(panel.gs$topratepl1) & !is.na(panel.gs$himobpopyear2p) & panel.gs$Year >= 1850 & panel.gs$Year <= 1970, ]
+
+model1A <- plm(topratep ~ topratepl1 + himobpopyear2p + Year,
+                data = temp1A,
+                index = c('ccode', 'Year'), 
+                model = "within")
+
+coeftest(model1A)
+```
+
+```{r}
+residuals <- resid(model1A)
+lag_residuals <- lag(residuals)
+lag_Year <- lag(temp1A$Year)
+aux_model <- lm(residuals[-1] ~ lag_residuals[-length(lag_residuals)] + lag_Year[-1] + lag_Year[- length(lag_Year)])
+bg_test <- bgtest(aux_model, order = 1)
+autocorr_coefficient <- bg_test$coefficients[2]
+print(bg_test)
+```
+
+#1.B
+```{r}
+temp1B<- panel.gs[!is.na(panel.gs$topratep) & !is.na(panel.gs$topratepl1) & !is.na(panel.gs$himobpopyear2p) & panel.gs$Year >= 1850 & panel.gs$Year <= 1970, ]
+model1B <- lm(topratep ~ topratepl1 + himobpopyear2p + Year + as.factor(ccode), data = temp1B) summary(car::pcse(model1B, temp1B$ccode, temp1B$Year))
+```
+
+#1.C
+
+```{R}
+results1 <- data.frame(Model = c("Fixed Effects (A)",
+"Fixed Effects PCSE (B)"),
+topratepl1 = c( 0.9352284, 0.93522844), topratepl1SE = c(0.0103412, 0.01391747), himobpopyear2p = c(4.1359548, 4.13595484), himobpopyear2pSE = c(0.7680536, 1.14623896))
+print(results1)
+```
+
+```{r}
+table_grob1 <- tableGrob(results1)
+ggsave("table51.png", plot = table_grob1, width = 20, height = 6, dpi = 300)
+
+```
+
+#Table 3, Column 2 
+#2.A
+
+```{r}
+temp2A <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model2A <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff, data = temp2A, index = c('ccode', 'Year'),
+model = "pooling") summary(model2A)
+```
+
+#2.B
+
+```{r}
+temp2B <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+
+model_2B <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + Year + as.factor(ccode),
+data=temp2B,
+index = c('ccode', 'Year'),
+model = "within") coeftest(model_2B)
+```
+
+#2.C
+
+```{r}
+temp2C <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model_cluster2C <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + Year + as.factor(ccode),
+data=temp2C,
+index = c('ccode', 'Year'), model = "within")
+vcov_cluster2C <- vcovHC(model_cluster2C, method = "arellano", type = "HC0", cluster = "group") coeftest(model_cluster2C, vcov. = vcov_cluster2C)
+```
+
+#2.D
+
+```{r}
+temp2D <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model2D <- lm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + Year + as.factor(ccode),
+index = c('ccode', 'Year'),
+data=temp2D)
+summary(pcse(model2D, temp2D$ccode, temp2D$Year)) 
+```
+
+#2.E
+
+```{R}
+results2 <- data.frame(Model = c("Pooled Regression (A)", "Fixed Effects (B)",
+"Fixed Effects CSE (C)", " Fixed Effects PCSE (D)"), topratepl1 = c(0.9762, 0.9376, 0.9376, 0.9376), topratepl1_SE = c(0.0084,0.0111, 0.0153, 0.0150),
+himobpopyear2p = c(3.8332, 4.1560,4.1560, 4.1560), himobpopyear2p_SE= c( 0.7753, 0.7748,0.8259,1.1455),
+gdppcp= c(0.0852, -0.1734,-0.1734,-0.1734), gdppcp_SE= c(0.0871, 0.1241,0.0966,0.1756),
+leftseatshp = c(0.0173 ,0.0209, 0.0209, 0.0209), leftseatshp_SE= c(0.0115,0.0159,0.0093, 0.0169),
+munsuff= c(0.2806,-0.5224,-0.5224, -0.5224), munsuff_SE= c(0.3989,0.5925,0.6675, 0.7268))
+print(results2) 
+```
+
+```{r}
+table_grob2 <- tableGrob(results2)
+ggsave("table52.png", plot = table_grob2, width = 20, height = 6, dpi = 300)
+```
+
+#2.F
+
+```{r}
+temp2F <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model2F <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + Year + as.factor(ccode),
+data = temp2F,
+index = c('ccode', 'Year'), model = "within")
+country_effects2F <- fixef(model2F) print(country_effects2F)
+```
+
+#Table 3, Column 5 
+#5.A
+
+```{r}
+temp5A <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model5A <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff, data = temp5A,
+index = c('ccode', 'decadec'),
+model = "pooling") summary(model5A)
+```
+
+#5.B
+
+```{r}
+temp5B <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model5B <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + as.factor(decadec) + as.factor(ccode),
+data=temp5B,
+index = c('ccode', 'decadec'),
+model = "within")
+coeftest(model5B) 
+```
+
+#5.C
+
+```{r}
+temp5C <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model_cluster5C <- plm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + as.factor(decadec) + as.factor(ccode),
+index = c('ccode', 'decadec'), data=temp5C,
+model = "within")
+
+vcov_cluster5C <- vcovHC(model_cluster5C, method = "arellano", type = "HC0", cluster = "group")
+coeftest(model_cluster5C, vcov. = vcov_cluster5C) 
+```
+
+#5.D
+
+```{r}
+temp5D <- subset(panel.gs, !is.na(topratep) & !is.na(topratepl1) & !is.na(himobpopyear2p) & !is.na(gdppcp) & !is.na(leftseatshp) & !is.na(munsuff) & Year>=1850 & Year<=1970)
+model5D <- lm(topratep ~ topratepl1 + himobpopyear2p + gdppcp + leftseatshp + munsuff + as.factor(decadec) + as.factor(ccode),
+index = c('ccode', 'decadec'), data=temp5D)
+summary(pcse(model5D, temp5D$ccode, temp5D$Year))
+```
+
+```{r}
+summary_table <- capture.output(summary(pcse(model5D, temp5D$ccode, temp5D$Year)))
+table_grob <- tableGrob(summary_table)
+png("summary_output.png", width = 2400, height = 2400, units = "px", res = 300) grid.arrange(table_grob, nrow = 1)
+```
+
+#Residuals for Reg 5D
+
+```{r}
+pcse_model5D <- summary(pcse(model5D, temp5D$ccode, temp5D$Year)) residuals_model5D <- residuals(model5D)
+par(mfrow = c(1, 1))
+plot(model5D, which = 1)
+plot(model5D, which = 2)
+plot(model5D, which = 3)
+plot(model5D, which = 5)
+```
+
+#tax per nation 5D
+
+```{r}
+expected_tax_rates <- predict(model5D, newdata = temp5D)
+country_tax_rates <- data.frame(ccode = temp5D$ccode, expected_tax_rates) print(country_tax_rates)
+predicted_tax <- aggregate(expected_tax_rates ~ ccode, data = country_tax_rates, FUN = mean) print(predicted_tax)
+```
+
+#Graph for 5D
+
+```{r}
+predicted_data <- data.frame(Year = temp5D$Year, PredictedTax = predicted_tax) ggplot(predicted_data, aes(x = Year, y = PredictedTax)) +
+geom_line() +
+labs(x = "Year", y = "Expected Tax Rates") ```
+```{r}
+predicted_tax <- aggregate(topratep ~ ccode, data = temp5D, FUN = function(x) mean(predict(model5D, newdata = data.frame(ccode = x))))
+predicted_tax
+```
+
+#5.E
+
+```{R}
+results2 <- data.frame(Model = c("Pooled Regression (A)", "Fixed Effects (B)",
+"Fixed Effects CSE (C)", " Fixed Effects PCSE (D)"), topratepl1 = c(0.9762, 0.9124, 0.9124, 0.9124), topratepl1_SE = c(0.00835, 0.0142, 0.0243, 0.0181),
+himobpopyear2p = c(3.8332, 3.3540,3.3540, 3.3540), himobpopyear2p_SE= c( 0.7753,0.8427,0.9723,1.152),
+gdppcp= c(0.0852, -0.0785,-0.0785,-0.0785), gdppcp_SE= c(0.0871, 0.1613,0.1272,0.2138),
+leftseatshp = c(0.0173 ,0.0064, 0.0064, 0.0064), leftseatshp_SE= c(0.0115,0.0159,0.0152, 0.0174),
+munsuff= c(0.2806,-0.8319,-0.8319, -0.8319), munsuff_SE= c(0.3989,0.6080,0.7944, 0.7626))
+print(results2) 
+```
+
+```{r}
+table_grob53 <- tableGrob(results2)
+ggsave("table53.png", plot = table_grob53, width = 20, height = 6, dpi = 300) 
+```
+
+#Number of 0 values in this subset
+```{r}
+subset_data <- panel.gs[panel.gs$Year >= 1850 & panel.gs$Year <= 1970, c("Year", "topratep")] num_zeros <- sum(subset_data$topratep == 0)
+cat("Number of 0 values in topratep:", num_zeros)
+```
