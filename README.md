@@ -1,4 +1,4 @@
-# Scheve-and-Stasavage-2010-Replication
+# Scheve & Stasavage (2010) Replication
 This is a quick reproduction I conducted for one of my advanced linear models classes in graduate school.
 
 Replication files for Kenneth Scheve and David Stasavage's (2010), "The Conscription of Wealth: Mass Warfare and the Demand for Progressive Taxation," International Organization 64(4): 529–61.
