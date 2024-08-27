@@ -519,7 +519,6 @@ table_grob53 <- tableGrob(results2)
 ggsave("table53.png", plot = table_grob53, width = 20, height = 6, dpi = 300) 
 ```
 
-#Number of 0 values in this subset
 ```{r}
 subset_data <- panel.gs[panel.gs$Year >= 1850 & panel.gs$Year <= 1970, c("Year", "topratep")] num_zeros <- sum(subset_data$topratep == 0)
 cat("Number of 0 values in topratep:", num_zeros)
